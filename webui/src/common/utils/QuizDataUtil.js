@@ -1,5 +1,6 @@
 import {imageCache} from './ImageCacheUtil.js';
 import {DEFAULT_QUESTION_TYPE, QUESTION_TYPES} from '../constants/QuestionTypes.js';
+import {normalizeAnswersForType} from './QuizAnswerUtil.js';
 
 export const prepareQuizData = async (questions, title, includeImageData = false) => {
     const questionsForProcessing = await Promise.all(questions.map(async (q) => {
@@ -37,7 +38,8 @@ export const prepareQuizData = async (questions, title, includeImageData = false
                 order: a.order || 1
             }));
         } else {
-            cleanQuestion.answers = await Promise.all(rest.answers.map(async (a) => {
+            const answers = normalizeAnswersForType(rest.answers, cleanQuestion.type, {includeEditorData: true});
+            cleanQuestion.answers = await Promise.all(answers.map(async (a) => {
                 const cleanAnswer = {...a, content: a.content ? a.content.trim() : "", is_correct: a.is_correct || false};
 
                 if (cleanAnswer.imageId && includeImageData) {
