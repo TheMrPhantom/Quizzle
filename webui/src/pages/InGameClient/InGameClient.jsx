@@ -140,6 +140,8 @@ export const InGameClient = () => {
         }
 
         const gameEnded = () => {
+            clearInterval(countdownInterval);
+            removeReconnectionCallback(handleReconnection);
             clearCurrentSession();
             socket.off("QUESTION_RECEIVED", onQuestion);
             socket.off("POINTS_RECEIVED", onPoints);
@@ -147,9 +149,11 @@ export const InGameClient = () => {
             socket.off("ANSWERS_READY", onAnswersReady);
             socket.off("GAME_ENDED", gameEnded);
             socket.off("disconnect", handleDisconnect);
+            socket.off("connect", handleConnect);
             socket.off("HOST_DISCONNECTED", hostDisconnected);
             socket.off("KICKED_FROM_ROOM", kickedFromRoom);
-            
+
+            toast.success("Quiz beendet! Die Ergebnisse siehst du beim Host.");
             navigate("/");
         }
 

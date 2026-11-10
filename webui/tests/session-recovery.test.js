@@ -60,6 +60,54 @@ const choiceQuestion = {
     ]
 };
 
+test('finishing the final question ends client sessions without an expiry error', async t => {
+    const game = await createGame(t);
+    const classmate = await addClassmate(game);
+    await showQuestion(game, choiceQuestion);
+    await request(game.student, 'SUBMIT_ANSWER', {answers: [0]});
+    await request(classmate, 'SUBMIT_ANSWER', {answers: [1]});
+
+    const events = new Map();
+    const finished = [game.student, classmate].map(student => {
+        const received = [];
+        events.set(student, received);
+        student.on('GAME_ENDED', () => received.push('GAME_ENDED'));
+        student.on('SESSION_EXPIRED', () => received.push('SESSION_EXPIRED'));
+        student.on('HOST_DISCONNECTED', () => received.push('HOST_DISCONNECTED'));
+        return once(student, 'disconnect');
+    });
+
+    const results = await request(game.host, 'END_GAME');
+    await Promise.all(finished);
+
+    assert.equal(Object.keys(results.players).length, 2);
+    assert.equal(results.analytics.questionAnalytics.length, 1);
+    assert.equal(game.host.connected, true);
+    for (const received of events.values()) {
+        assert.deepEqual(received, ['GAME_ENDED']);
+    }
+
+    const returning = await game.connect();
+    const restored = await request(returning, 'RECONNECT_WITH_SESSION', {sessionId: game.sessionId});
+    assert.equal(restored.success, false);
+    assert.equal(restored.sessionInvalid, true);
+    const room = await request(returning, 'CHECK_ROOM', {code: game.code});
+    assert.equal(room.exists, false);
+});
+
+test('a host leaving interrupts clients without announcing successful completion', async t => {
+    const game = await createGame(t);
+    const received = [];
+    for (const event of ['GAME_ENDED', 'SESSION_EXPIRED', 'HOST_DISCONNECTED']) {
+        game.student.on(event, () => received.push(event));
+    }
+    const disconnected = once(game.student, 'disconnect');
+    game.host.disconnect();
+    await disconnected;
+
+    assert.deepEqual(received, ['HOST_DISCONNECTED']);
+});
+
 test('a returning student rejoins a locked lobby with the same identity', async t => {
     const game = await createGame(t);
     const oldId = game.student.id;

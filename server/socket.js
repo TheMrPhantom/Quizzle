@@ -48,12 +48,14 @@ const handleValidationError = (callback, schema, data) => {
     return false;
 };
 
-const endGameForAllPlayers = (io, room, roomCode) => {
+const endGameForAllPlayers = (io, room, roomCode, event = 'GAME_ENDED') => {
     for (const player of Object.keys(room.players)) {
-        io.to(player).emit("GAME_ENDED", room.playerAnswers.filter(answer => answer[player]));
+        const data = event === 'GAME_ENDED'
+            ? room.playerAnswers.filter(answer => answer[player])
+            : 'Host has left the game';
+        io.to(player).emit(event, data);
         const playerSocket = io.sockets.sockets.get(player);
         if (playerSocket) {
-            playerSocket.emit('SESSION_EXPIRED', 'Game ended');
             playerSocket.disconnect(true);
         }
     }
@@ -561,8 +563,7 @@ module.exports = (io, socket) => {
         const room = rooms[currentRoomCode];
 
         if (room.host === socket.id) {
-            io.to(currentRoomCode.toString()).emit('HOST_DISCONNECTED', 'Host has left the game');
-            endGameForAllPlayers(io, room, currentRoomCode);
+            endGameForAllPlayers(io, room, currentRoomCode, 'HOST_DISCONNECTED');
             return;
         }
 
