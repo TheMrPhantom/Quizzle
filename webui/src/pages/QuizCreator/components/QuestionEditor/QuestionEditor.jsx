@@ -8,6 +8,7 @@ import {motion, AnimatePresence} from "framer-motion";
 import {useState, useRef, useEffect} from "react";
 import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
 import {QUESTION_TYPES, QUESTION_TYPE_CONFIG, getQuestionTypeIcon, getQuestionTypeName, getDefaultAnswersForType, DEFAULT_QUESTION_TYPE} from "@/common/constants/QuestionTypes.js";
+import {normalizeAnswersForType} from "@/common/utils/QuizAnswerUtil.js";
 
 export const QuestionEditor = ({question, onChange, onCommit, deleteQuestion, duplicateQuestion}) => {
     const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -15,6 +16,10 @@ export const QuestionEditor = ({question, onChange, onCommit, deleteQuestion, du
     
     const updateTitle = (title) => onChange({...question, title: title});
     const updateType = (type) => {
+        if (type === (question.type || DEFAULT_QUESTION_TYPE)) {
+            setShowTypeSelector(false);
+            return;
+        }
         const commit = onCommit || onChange;
         const newAnswers = getDefaultAnswersForType(type);
         if (type === QUESTION_TYPES.WORD_CLOUD) {
@@ -23,11 +28,8 @@ export const QuestionEditor = ({question, onChange, onCommit, deleteQuestion, du
             return;
         }
         const updatedQuestion = question.type === QUESTION_TYPES.WORD_CLOUD ? {...question, pointMultiplier: undefined} : question;
-        if (newAnswers.length === 0) {
-            commit({...updatedQuestion, type: type});
-        } else {
-            commit({...updatedQuestion, type: type, answers: newAnswers});
-        }
+        const answers = normalizeAnswersForType(newAnswers.length === 0 ? question.answers : newAnswers, type, {includeEditorData: true});
+        commit({...updatedQuestion, type, answers});
         setShowTypeSelector(false);
     };
 

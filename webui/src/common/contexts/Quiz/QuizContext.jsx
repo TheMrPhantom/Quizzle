@@ -5,6 +5,7 @@ import {socket, addReconnectionCallback, removeReconnectionCallback} from "@/com
 import {soundManager} from "@/common/utils/SoundManager.js";
 import {QuizValidationUtil} from "@/common/utils/QuizValidationUtil.js";
 import {DEFAULT_QUIZ_SETTINGS} from "@/common/constants/QuizSettings.js";
+import {normalizeAnswersForType} from "@/common/utils/QuizAnswerUtil.js";
 
 export const QuizContext = createContext({});
 
@@ -78,7 +79,10 @@ export const QuizProvider = ({children}) => {
 
     const applySettings = (parsedData) => {
         const settings = {...DEFAULT_QUIZ_SETTINGS, ...parsedData.settings};
-        let processedQuestions = [...parsedData.questions];
+        let processedQuestions = parsedData.questions.map(q => ({
+            ...q,
+            answers: normalizeAnswersForType(q.answers, q.type)
+        }));
 
         if (settings.shuffleQuestions) {
             processedQuestions = randomizeArray(processedQuestions);

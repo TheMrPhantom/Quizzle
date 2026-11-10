@@ -2,6 +2,7 @@ import pako from 'pako';
 import {generateUuid} from './UuidUtil.js';
 import {imageCache} from './ImageCacheUtil.js';
 import {DEFAULT_QUESTION_TYPE} from '../constants/QuestionTypes.js';
+import {normalizeAnswersForType} from './QuizAnswerUtil.js';
 
 export const createFileInput = (accept, onFileSelected) => {
     const input = document.createElement("input");
@@ -27,6 +28,9 @@ export const importQuizzleFile = (file) => {
                 const questions = await Promise.all(parsedData.questions.map(async (q) => {
                     const newUuid = generateUuid();
                     const newQuestion = {uuid: newUuid, ...q, type: q.type || DEFAULT_QUESTION_TYPE};
+                    if (newQuestion.answers) {
+                        newQuestion.answers = normalizeAnswersForType(newQuestion.answers, newQuestion.type);
+                    }
 
                     if (q.b64_image) {
                         try {
