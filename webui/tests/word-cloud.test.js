@@ -31,6 +31,15 @@ test('case, spacing and Unicode presentation variants merge with accurate counts
     assert.equal(result.totalResponses, 4);
 });
 
+test('word clouds count every contribution and accept older single-answer records', () => {
+    const result = cloud.buildWordCloud([['Climate', 'Oceans'], ['climate', 'Forests'], 'Oceans', undefined]);
+    assert.equal(result.totalResponses, 5);
+    assert.equal(result.words.length, 3);
+    assert.equal(result.words.find(word => word.text === 'Climate').count, 2);
+    assert.equal(result.words.find(word => word.text === 'Oceans').count, 2);
+    assert.deepEqual(room.generateAnswerData(question, {alice: ['Climate', 'Oceans'], bob: 'climate'}, {}).totalResponses, 3);
+});
+
 test('common typos sit together and retain individual spellings and counts', () => {
     const result = cloud.buildWordCloud(['climate', 'climate', 'climate', 'climtae', 'climat', 'climote', 'oceans']);
     const climate = result.words.find(word => word.text === 'climate');

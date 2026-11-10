@@ -206,9 +206,10 @@ app.post('/:code/submit-answer', async (req, res) => {
         let answerScore = 0;
 
         if (question.type === 'word-cloud') {
-            normalizedAnswer = normalizeWordCloudAnswer(answer);
-            if (normalizedAnswer === null) {
-                return res.status(400).json({message: 'Bitte gib einen Begriff mit maximal 40 Zeichen ein.'});
+            const contributions = Array.isArray(answer) ? answer : [answer];
+            normalizedAnswer = contributions.map(normalizeWordCloudAnswer);
+            if (normalizedAnswer.length === 0 || normalizedAnswer.some(value => value === null)) {
+                return res.status(400).json({message: 'Bitte gib pro Beitrag einen Begriff mit maximal 40 Zeichen ein.'});
             }
             answerResult = 'ungraded';
         } else if (question.type === 'text') {

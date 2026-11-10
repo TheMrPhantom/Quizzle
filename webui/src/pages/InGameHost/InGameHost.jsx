@@ -18,7 +18,7 @@ import {useSoundManager} from "@/common/utils/SoundManager.js";
 import SoundRenderer from "@/common/components/SoundRenderer";
 import SoundControl from "@/common/components/SoundControl";
 import {QUESTION_TYPES} from "@/common/constants/QuestionTypes.js";
-import WordCloud from '@/common/components/WordCloud';
+import {WordCloudPanel} from '@/common/components/WordCloudPanel/WordCloudPanel.jsx';
 
 export const InGameHost = () => {
     const {isLoaded, pullNextQuestion, scoreboard, setScoreboard, playerCount, setPlayerCount} = useContext(QuizContext);
@@ -40,6 +40,7 @@ export const InGameHost = () => {
         answeredCount: 0,
         activePlayerCount: 0
     });
+    const isWordCloud = currentQuestion?.type === QUESTION_TYPES.WORD_CLOUD;
 
     const skipQuestion = async () => {
         try {
@@ -248,12 +249,19 @@ export const InGameHost = () => {
                 />
             )}
             
-            {gameState === 'answer-results' && answerData && (
+            {gameState === 'answer-results' && answerData && !isWordCloud && (
                 <AnswerResults 
                     question={currentQuestion} 
                     answerData={answerData}
                     showScoreboard={showScoreboard}
                 />
+            )}
+
+            {isWordCloud && (gameState === 'answer-results' || (gameState === 'question' && questionAnimationState === 'answers-ready')) && (
+                <WordCloudPanel {...(gameState === 'answer-results' ? answerData : wordCloud)}
+                                title={currentQuestion.title}
+                                actionLabel={gameState === 'answer-results' ? 'Scoreboard anzeigen' : 'Sammlung beenden'}
+                                onAction={gameState === 'answer-results' ? showScoreboard : skipQuestion}/>
             )}
             
             {gameState === 'scoreboard' && (
@@ -266,10 +274,10 @@ export const InGameHost = () => {
             {gameState === 'question' && (
                 <div className="ingame-question">
                     {Object.keys(currentQuestion).length !== 0 && <div className="question-content-container">
-                        <div className="top-area">
-                            <Button onClick={skipQuestion} text="Frage überspringen"
+                        {(!isWordCloud || questionAnimationState !== 'answers-ready') && <div className="top-area">
+                            <Button onClick={skipQuestion} text={currentQuestion.type === QUESTION_TYPES.WORD_CLOUD ? 'Sammlung beenden' : 'Frage überspringen'}
                                     padding="1rem 1.5rem" icon={faForward} />
-                        </div>
+                        </div>}
                         
                         <div className={`question-wrapper ${questionAnimationState}`}>
                             <Question title={currentQuestion.title} image={currentQuestion.b64_image}/>
@@ -279,7 +287,7 @@ export const InGameHost = () => {
                             <div className="answer-progress-panel">
                                 <div className="answer-progress-counter">
                                     <span className="answer-progress-number">{answerProgress.answeredCount}</span>
-                                    <span className="answer-progress-label">Antworten</span>
+                                    <span className="answer-progress-label">{currentQuestion.type === QUESTION_TYPES.WORD_CLOUD ? 'Teilnehmende mit Beiträgen' : 'Antworten'}</span>
                                 </div>
                             </div>
                         )}
@@ -289,10 +297,6 @@ export const InGameHost = () => {
                                 {currentQuestion.answers.map((answer, index) => <Answer key={index} answer={answer}
                                                                                         index={index} questionType={currentQuestion.type}/>)}
                             </div>
-                        )}
-
-                        {questionAnimationState === 'answers-ready' && currentQuestion.type === QUESTION_TYPES.WORD_CLOUD && (
-                            <WordCloud {...wordCloud}/>
                         )}
 
                         {questionAnimationState === 'answers-ready' && currentQuestion.type === QUESTION_TYPES.SLIDER && (

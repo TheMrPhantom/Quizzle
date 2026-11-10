@@ -74,6 +74,8 @@ const emitActivePlayerCount = (io, room) => {
 };
 
 const handleAllAnswered = (io, roomCode, room) => {
+    if (room.currentQuestion.type === 'word-cloud') return false;
+
     const currentAnswers = room.playerAnswers[room.playerAnswers.length - 1];
     const activePlayers = getActivePlayers(room, io);
     const activePlayerIds = Object.keys(activePlayers);
@@ -457,18 +459,23 @@ module.exports = (io, socket) => {
         }
 
         const playerAnswers = room.playerAnswers;
-        if (Object.prototype.hasOwnProperty.call(playerAnswers[playerAnswers.length - 1], socket.id)) {
+        const currentAnswers = playerAnswers[playerAnswers.length - 1];
+        const isWordCloud = room.currentQuestion.type === 'word-cloud';
+        if (!isWordCloud && Object.prototype.hasOwnProperty.call(currentAnswers, socket.id)) {
             return callback({success: false, error: 'Antwort bereits abgegeben'});
         }
 
         if (handleValidationError(callback, answerQuestion, data)) return;
 
-        const isWordCloud = room.currentQuestion.type === 'word-cloud';
         const submittedAnswer = isWordCloud ? normalizeWordCloudAnswer(data.answers) : data.answers;
         if (isWordCloud && submittedAnswer === null) {
             return callback({success: false, error: 'Bitte gib einen Begriff mit maximal 40 Zeichen ein.'});
         }
-        playerAnswers[playerAnswers.length - 1][socket.id] = submittedAnswer;
+        if (isWordCloud) {
+            currentAnswers[socket.id] = [...(currentAnswers[socket.id] || []), submittedAnswer];
+        } else {
+            currentAnswers[socket.id] = submittedAnswer;
+        }
 
         const score = calculateLiveScore(room.currentQuestion, data.answers);
         const isFlatScoring = room.settings?.scoringMode === 'flat';
@@ -489,8 +496,6 @@ module.exports = (io, socket) => {
 
         if (!handleAllAnswered(io, currentRoomCode, room)) {
             const activePlayers = getActivePlayers(room, io);
-            const currentAnswers = playerAnswers[playerAnswers.length - 1];
-
             io.to(room.host).emit('ANSWER_PROGRESS', {
                 answeredCount: Object.keys(activePlayers).filter(id =>
                     Object.prototype.hasOwnProperty.call(currentAnswers, id)).length,
@@ -499,7 +504,7 @@ module.exports = (io, socket) => {
             });
         }
 
-        callback({success: true});
+        callback(isWordCloud ? {success: true, contributions: currentAnswers[socket.id]} : {success: true});
     });
 
     socket.on('SKIP_QUESTION', (data, callback) => {

@@ -60,7 +60,7 @@ const groupSimilarWords = (words) => {
 const buildWordCloud = (answers) => {
     const words = new Map();
     let totalResponses = 0;
-    for (const answer of answers) {
+    for (const answer of answers.flat()) {
         const text = normalizeWordCloudAnswer(answer);
         if (text === null) continue;
         const key = text.toLowerCase();

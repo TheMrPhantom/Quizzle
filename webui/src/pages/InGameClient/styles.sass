@@ -44,13 +44,6 @@
     align-items: center
     height: 100%
 
-    &.word-cloud-waiting
-      flex-direction: column
-      padding: 1.5rem
-      box-sizing: border-box
-      text-align: center
-      overflow-wrap: anywhere
-
 @keyframes pulse
   0%, 100%
     opacity: 1
@@ -146,6 +139,11 @@
     align-items: center
     justify-content: center
     padding: 2rem
+
+  &.word-cloud-layout
+    align-items: center
+    justify-content: flex-start
+    overflow-y: auto
 
   &.sequence-layout
     display: flex

@@ -194,7 +194,8 @@ export const PracticeResults = () => {
 
     const renderAnswerContent = (question, answer, result, correctAnswer) => {
         if (question.type === QUESTION_TYPES.WORD_CLOUD) {
-            return <div className="text-answer"><p>Dein Begriff: {answer}</p><p>Ohne Bewertung</p></div>;
+            const contributions = Array.isArray(answer) ? answer : [answer];
+            return <div className="text-answer"><p>Deine Beiträge:</p><ul>{contributions.map((term, index) => <li key={index}>{term}</li>)}</ul><p>Ohne Bewertung</p></div>;
         }
         if (question.type === QUESTION_TYPES.TEXT) {
             return (

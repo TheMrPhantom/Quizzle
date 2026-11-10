@@ -51,11 +51,14 @@ test('practice records word-cloud responses without reducing the score for grade
     assert.equal(quiz.questions[0].type, 'word-cloud');
     assert.equal(quiz.questions[0].maxLength, 40);
     assert.deepEqual(quiz.questions[0].answers, []);
-    assert.equal((await game.submit(0, '')).status, 400);
-    assert.equal((await game.submit(0, ['climate'])).status, 400);
-    const response = await (await game.submit(0, '  Green  energy  ')).json();
+    for (const answer of ['', [], ['climate', ''], ['climate', 'a'.repeat(41)], ['climate', 12], [['climate']]]) {
+        assert.equal((await game.submit(0, answer)).status, 400);
+    }
+    const response = await (await game.submit(0, ['  Green  energy  ', 'Oceans', 'green energy'])).json();
     assert.equal(response.result, 'ungraded');
     assert.equal(response.wordCloud.words[0].text, 'Green energy');
+    assert.equal(response.wordCloud.words[0].count, 2);
+    assert.equal(response.wordCloud.totalResponses, 3);
     assert.equal((await game.submit(0, 'duplicate')).status, 400);
     const final = await (await game.submit(1, 'Berlin')).json();
     assert.equal(final.isLastQuestion, true);
@@ -63,7 +66,7 @@ test('practice records word-cloud responses without reducing the score for grade
     assert.equal(final.finalResults.total, 1);
     const stored = JSON.parse(await readFile(game.resultPath, 'utf8'));
     assert.equal(stored.answers[0].result, 'ungraded');
-    assert.equal(stored.answers[0].userAnswer, 'Green energy');
+    assert.deepEqual(stored.answers[0].userAnswer, ['Green energy', 'Oceans', 'green energy']);
     assert.equal(stored.answers[0].score, 0);
 });
 
@@ -74,4 +77,5 @@ test('a practice questionnaire consisting only of word clouds finishes without a
     assert.equal(response.result, 'ungraded');
     assert.equal(response.finalResults.total, 0);
     assert.equal(response.finalResults.score, 0);
+    assert.deepEqual(response.finalResults.results[0].userAnswer, ['climate']);
 });

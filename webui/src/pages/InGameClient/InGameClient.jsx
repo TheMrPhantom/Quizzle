@@ -8,12 +8,13 @@ import {faCheck, faCheckCircle, faMinus, faPaperPlane, faX, faWifi, faExclamatio
 import AnswerShape from "@/common/components/AnswerShape";
 import {TrueFalseClient} from "./components/TrueFalseClient";
 import {TextInputClient} from "./components/TextInputClient";
+import {WordCloudClient} from "./components/WordCloudClient/WordCloudClient.jsx";
 import {SequenceClient} from "./components/SequenceClient";
 import SliderClient from "./components/SliderClient";
 import ClientAnswerReview from "./components/ClientAnswerReview";
 import {jsonRequest, postRequest} from "@/common/utils/RequestUtil.js";
 import {generateUuid} from "@/common/utils/UuidUtil.js";
-import {QUESTION_TYPES, SLIDER_MARGIN_CONFIG, WORD_CLOUD_MAX_LENGTH} from "@/common/constants/QuestionTypes.js";
+import {QUESTION_TYPES, SLIDER_MARGIN_CONFIG} from "@/common/constants/QuestionTypes.js";
 import WordCloud from '@/common/components/WordCloud';
 import {useSoundManager} from "@/common/utils/SoundManager.js";
 import toast from "react-hot-toast";
@@ -45,6 +46,8 @@ export const InGameClient = () => {
     const [userSubmittedAnswer, setUserSubmittedAnswer] = useState(null);
     const [sliderAnswerData, setSliderAnswerData] = useState(null);
     const [wordCloud, setWordCloud] = useState(null);
+    const [wordCloudContributions, setWordCloudContributions] = useState([]);
+    const [wordCloudQuestionKey, setWordCloudQuestionKey] = useState(0);
     const [isConnected, setIsConnected] = useState(socket.connected);
     const [isReconnecting, setIsReconnecting] = useState(false);
     const [answersReady, setAnswersReady] = useState(false);
@@ -77,6 +80,8 @@ export const InGameClient = () => {
         const onQuestion = (question) => {
             clearInterval(countdownInterval);
             setWordCloud(null);
+            setWordCloudContributions([]);
+            setWordCloudQuestionKey(previous => previous + 1);
             setAnswers([]);
             setAnswerLabels([]);
             setSliderAnswerData(null);
@@ -201,7 +206,9 @@ export const InGameClient = () => {
                         if (gameState.answersReady) onAnswersReady();
                         if (gameState.hasAnswered) {
                             recordSubmittedAnswer(gameState.submittedAnswer, gameState.currentQuestion);
-                            setCurrentQuestion(null);
+                            if (gameState.currentQuestion.type !== QUESTION_TYPES.WORD_CLOUD) {
+                                setCurrentQuestion(null);
+                            }
                         }
                         if (gameState.questionCompleted) onAnswer(gameState.answerData);
                     } else {
@@ -313,9 +320,11 @@ export const InGameClient = () => {
 
             setPracticeQuestionResult(response);
             setShowingPracticeResult(true);
+            return true;
         } catch (error) {
             console.error('Error submitting practice answer:', error);
             toast.error('Fehler beim Senden der Antwort.');
+            return false;
         }
     };
 
@@ -324,6 +333,7 @@ export const InGameClient = () => {
             setCurrentQuestionIndex(currentQuestionIndex + 1);
             setSelection([]);
             setUserSubmittedAnswer(null);
+            setWordCloudContributions([]);
             setShowingPracticeResult(false);
             setPracticeQuestionResult(null);
         }
@@ -383,10 +393,11 @@ export const InGameClient = () => {
         switch (question.type) {
             case QUESTION_TYPES.WORD_CLOUD:
                 return (
-                    <div className="ingame-content text-layout">
-                        <TextInputClient key={isPracticeMode ? currentQuestionIndex : question.title}
-                                         onSubmit={submitAnswer} maxLength={WORD_CLOUD_MAX_LENGTH}
-                                         placeholder="Ein Begriff oder eine kurze Wortgruppe..."/>
+                    <div className="ingame-content word-cloud-layout">
+                        <WordCloudClient key={isPracticeMode ? currentQuestionIndex : wordCloudQuestionKey}
+                                         contributions={wordCloudContributions}
+                                         onSubmit={submitWordCloudContribution}
+                                         onFinish={isPracticeMode ? submitPracticeAnswer : undefined}/>
                     </div>
                 );
 
@@ -496,7 +507,9 @@ export const InGameClient = () => {
     const recordSubmittedAnswer = (answers, questionForSubmit) => {
         const typeForSubmit = questionForSubmit?.type;
 
-        if (typeForSubmit === QUESTION_TYPES.TEXT || typeForSubmit === QUESTION_TYPES.WORD_CLOUD) {
+        if (typeForSubmit === QUESTION_TYPES.WORD_CLOUD) {
+            setWordCloudContributions(Array.isArray(answers) ? answers : [answers]);
+        } else if (typeForSubmit === QUESTION_TYPES.TEXT) {
             const textValue = Array.isArray(answers) ? (answers[0] || '') : answers;
             setUserSubmittedAnswer(textValue);
             setSelection([textValue]);
@@ -519,6 +532,28 @@ export const InGameClient = () => {
             setSelection(boolSelection);
         }
         if (typeForSubmit) setLastQuestionType(typeForSubmit);
+    };
+
+    const submitWordCloudContribution = async (term) => {
+        if (isPracticeMode) {
+            setWordCloudContributions(previous => [...previous, term]);
+            return true;
+        }
+
+        if (!answersReady) return false;
+
+        try {
+            const response = await socket.timeout(10000).emitWithAck('SUBMIT_ANSWER', {answers: term});
+            if (!response?.success) {
+                toast.error(response?.error || 'Fehler beim Senden des Beitrags.');
+                return false;
+            }
+            setWordCloudContributions(response.contributions);
+            return true;
+        } catch {
+            toast.error('Fehler beim Senden des Beitrags. Bitte versuche es erneut.');
+            return false;
+        }
     };
 
     const submitAnswer = (answers) => {
@@ -692,10 +727,8 @@ export const InGameClient = () => {
             )}
 
             {!isPracticeMode && currentQuestion === null && answers.length === 0 && sliderAnswerData === null && wordCloud === null && (
-                <div className={`loading-container${lastQuestionType === QUESTION_TYPES.WORD_CLOUD && userSubmittedAnswer !== null ? ' word-cloud-waiting' : ''}`}>
-                    {lastQuestionType === QUESTION_TYPES.WORD_CLOUD && userSubmittedAnswer !== null
-                        ? <><h2>Dein Begriff wurde gesendet.</h2><p>{userSubmittedAnswer}</p><p>Die gemeinsame Wortwolke erscheint gleich.</p></>
-                        : <div className="lds-hourglass"></div>}
+                <div className="loading-container">
+                    <div className="lds-hourglass"></div>
                 </div>
             )}
 

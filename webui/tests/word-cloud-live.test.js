@@ -43,7 +43,7 @@ const createGame = async t => {
         sessionIds.push(joined.sessionId);
         students.push(student);
     }
-    return {host, students, sessionIds};
+    return {host, students, sessionIds, connect};
 };
 
 const showQuestion = async (game, question) => {
@@ -52,7 +52,7 @@ const showQuestion = async (game, question) => {
     await ready;
 };
 
-test('live word clouds update, group typos, reject duplicate answers and preserve scores and streaks', async t => {
+test('students can send multiple word-cloud contributions until the host closes the collection', async t => {
     const game = await createGame(t);
     await showQuestion(game, {title: 'Capital?', type: 'text', answers: [{content: 'Berlin'}]});
     for (const student of game.students) await request(student, 'SUBMIT_ANSWER', {answers: 'Berlin'});
@@ -70,23 +70,36 @@ test('live word clouds update, group typos, reject duplicate answers and preserv
     const [live] = await liveUpdate;
     assert.equal(live.totalResponses, 1);
     assert.equal(live.words[0].text, 'Climate');
-    assert.equal((await request(game.students[0], 'SUBMIT_ANSWER', {answers: 'Another idea'})).success, false);
+    const progress = [];
+    game.host.on('ANSWER_PROGRESS', update => progress.push(update.answeredCount));
+    const second = await request(game.students[0], 'SUBMIT_ANSWER', {answers: 'Oceans'});
+    assert.equal(second.success, true);
+    assert.deepEqual(second.contributions, ['Climate', 'Oceans']);
 
     const restored = await request(game.students[0], 'RECONNECT_WITH_SESSION', {sessionId: game.sessionIds[0]});
     assert.equal(restored.gameState.currentQuestion.type, 'word-cloud');
     assert.equal(restored.gameState.hasAnswered, true);
-    assert.equal(restored.gameState.submittedAnswer, 'Climate');
+    assert.deepEqual(restored.gameState.submittedAnswer, ['Climate', 'Oceans']);
+    assert.equal(restored.gameState.questionCompleted, false);
     assert.equal(restored.gameState.playerPoints, 100);
     assert.equal(restored.gameState.streak, 1);
 
+    await request(game.students[1], 'SUBMIT_ANSWER', {answers: 'climtae'});
+    const stillOpen = await request(game.students[0], 'RECONNECT_WITH_SESSION', {sessionId: game.sessionIds[0]});
+    assert.equal(stillOpen.gameState.questionCompleted, false, 'every student contributing must not close the collection');
+    assert.equal((await request(game.students[0], 'SUBMIT_ANSWER', {answers: 'climate'})).success, true);
+
     const finalResult = once(game.students[0], 'ANSWER_RECEIVED');
     const pointsResult = once(game.students[0], 'POINTS_RECEIVED');
-    await request(game.students[1], 'SUBMIT_ANSWER', {answers: 'climtae'});
+    await request(game.host, 'SKIP_QUESTION');
     const [cloud] = await finalResult;
     assert.equal(cloud.type, 'word-cloud');
-    assert.equal(cloud.totalResponses, 2);
-    assert.equal(cloud.words.length, 2);
+    assert.equal(cloud.totalResponses, 4);
+    assert.equal(cloud.words.length, 3);
+    assert.equal(cloud.words[0].count, 2);
     assert.equal(cloud.words[0].group, cloud.words[1].group);
+    assert.deepEqual(progress, [1, 2, 2], 'progress counts students rather than contributions');
+    assert.equal((await request(game.students[0], 'SUBMIT_ANSWER', {answers: 'Too late'})).success, false);
     const [points] = await pointsResult;
     assert.equal(points.points, 100);
     assert.equal(points.pointsEarned, 0);
@@ -98,6 +111,31 @@ test('live word clouds update, group typos, reject duplicate answers and preserv
     const ended = await request(game.host, 'END_GAME');
     assert.equal(ended.analytics.studentAnalytics[0].accuracy, 100);
     assert.equal(ended.analytics.questionAnalytics[1].ungraded, true);
+    assert.equal(ended.analytics.questionAnalytics[1].totalResponses, 4);
+    assert.deepEqual(ended.analytics.questionAnalytics[1].words, cloud.words);
+});
+
+test('a student can reconnect and keep contributing after everyone else disconnects', async t => {
+    const game = await createGame(t);
+    await showQuestion(game, {title: 'Your ideas?', type: 'word-cloud', answers: []});
+    await request(game.students[0], 'SUBMIT_ANSWER', {answers: 'Climate'});
+    game.students[1].disconnect();
+    game.students[0].disconnect();
+
+    const returning = await game.connect();
+    const restored = await request(returning, 'RECONNECT_WITH_SESSION', {sessionId: game.sessionIds[0]});
+    assert.equal(restored.gameState.questionCompleted, false);
+    assert.deepEqual(restored.gameState.submittedAnswer, ['Climate']);
+    const second = await request(returning, 'SUBMIT_ANSWER', {answers: 'Oceans'});
+    assert.equal(second.success, true);
+    assert.deepEqual(second.contributions, ['Climate', 'Oceans']);
+    const third = await request(returning, 'SUBMIT_ANSWER', {answers: 'Forests'});
+    assert.equal(third.success, true);
+
+    const result = await request(game.host, 'SKIP_QUESTION');
+    assert.equal(result.answerData.totalResponses, 3);
+    assert.deepEqual(result.answers[returning.id], ['Climate', 'Oceans', 'Forests']);
+    assert.equal(Object.keys(result.answers).length, 1);
 });
 
 test('the host can finish a word cloud without any submissions', async t => {
